@@ -513,6 +513,7 @@ def pair_up_partitions_polar(partition_num: int, partition_index: np.ndarray, dp
         The IoU of the paired partitions.
     """
 
+    self_paired_partitions = []
     paired_partitions = []
     paired_iou = []
 
@@ -528,7 +529,7 @@ def pair_up_partitions_polar(partition_num: int, partition_index: np.ndarray, dp
         max_iou = 0
         best_match = None
 
-        for other_label in range(p_label + 1, partition_num + 1):
+        for other_label in range(p_label, partition_num + 1):
             partition_index_copy = partition_index.copy()
             other_partition = np.roll(partition_index_copy, rolling_column, axis=1) == other_label
             intersection = np.logical_and(current_partition, other_partition).sum()
@@ -547,13 +548,16 @@ def pair_up_partitions_polar(partition_num: int, partition_index: np.ndarray, dp
     # Track paired partitions to ensure each partition is paired only once
     paired = set()
     for p1, p2, iou in iou_pairs:
-        if p1 not in paired and p2 not in paired:
+        if p1 not in paired and p2 not in paired and p1 != p2:
             paired_partitions.append((p1, p2))
             paired_iou.append(iou)
             paired.add(p1)
             paired.add(p2)
+        elif p1 not in paired and p2 not in paired and p1 == p2:
+            self_paired_partitions.append(p1)
+            paired.add(p1)
 
-    return paired_partitions, paired_iou
+    return paired_partitions, paired_iou, self_paired_partitions
 
 
 def align_pair_up_paritions_swim(partition_index_swim, paired_swim_parts):
@@ -807,14 +811,14 @@ def cal_hs(wave_spec: np.ndarray, x_mesh: np.ndarray, y_mesh: np.ndarray, spec_m
     to_int_term = wave_spec.copy()
     if spec_mode == 'skth':
         to_int_term = to_int_term / y_mesh
+        Hs = 4 * np.sqrt(polar_integration(y_mesh, x_mesh, to_int_term))
     elif spec_mode == 'fkth':
         to_int_term = to_int_term * y_mesh
+        Hs = 4 * np.sqrt(polar_integration(y_mesh, x_mesh, to_int_term))
     elif spec_mode == 'fkxy':
-        pass
+        Hs = 4 * np.sqrt(np.trapz(np.trapz(to_int_term, y_mesh, axis=0), x_mesh[0, :]))
     else:
         raise Exception("Invalid spec_mode, spec_mode should be one of 'skth', 'fkth', 'fkxy'.")
-
-    Hs = 4 * np.sqrt(np.trapz(np.trapz(to_int_term, y_mesh, axis=0), x_mesh[0, :]))
 
     return Hs
 
@@ -1115,7 +1119,7 @@ def polar_integration(rho: np.ndarray, phi: np.ndarray, func: np.ndarray) -> flo
     return res
 
 
-def merge_partitions(partition_index: np.ndarray, partition_num: int, K: np.ndarray, PHI: np.ndarray, slope_spec: np.ndarray, wind_parts: np.ndarray, merge_thres: float=0.4) -> tuple[np.ndarray, bool]:
+def merge_partitions(partition_index: np.ndarray, partition_num: int, K: np.ndarray, PHI: np.ndarray, slope_spec: np.ndarray, merge_thres: float=0.4) -> np.ndarray:
     """
     Merge partitions in the wave spectrum.
 
@@ -1130,9 +1134,6 @@ def merge_partitions(partition_index: np.ndarray, partition_num: int, K: np.ndar
     partition_merge : list
         The list of partitions to be merged.
 
-    wind_flag : np.ndarray
-        The wind flag of the wave spectrum. 1 for wind wave, 0 for swell wave.
-
     merge_thres : float
         The threshold for merging partitions. Default is 0.4.
 
@@ -1143,12 +1144,24 @@ def merge_partitions(partition_index: np.ndarray, partition_num: int, K: np.ndar
     
     start_with_wind_flag : bool
         True if the merged partition starts with wind wave, False otherwise.
+    
+    References
+    Hanson, J. L., & Phillips, O. M. (2001). Automated Analysis of Ocean Surface Directional Wave Spectra. Journal of Atmospheric and Oceanic Technology, 18(2), 277–293. https://doi.org/10.1175/1520-0426(2001)018<0277:AAOOSD>2.0.CO;2
     """
 
+    # Input validation
+    labels = np.unique(partition_index)
+    labels.sort()
+    num_labels = len(labels) if labels[0] != 0 else len(labels) - 1
+    if num_labels != partition_num:
+        raise ValueError(f"The actual number of partitions ({num_labels}) don't equal the given partition_num({partition_num}) parameter.")
+    if not np.all(np.diff(labels) == 1):
+        raise ValueError("The labels are not consecutive integers. Please resign the label number before using this function.")
+    
     partition_connect_flag = np.zeros((partition_num, partition_num), dtype=np.float64)
     spreads_coef_list = np.zeros((partition_num, 1), dtype=np.float64)
 
-    # calculate the spreading coefficient for each partition
+    # calculate the spreading coefficient for each partition, background partition 0 is negelected
     for p_idx in range(1, partition_num + 1):
         partition_index_clone = partition_index.copy()
         partition_index_clone[partition_index != p_idx] = 0
@@ -1178,24 +1191,14 @@ def merge_partitions(partition_index: np.ndarray, partition_num: int, K: np.ndar
     partition_index_clone = partition_index.copy()
     groups = find_connected_components(partition_connect_flag)
     for parts_idx in groups:
-        parts_idx = [idx for idx in parts_idx if idx + 1 not in wind_parts]
+        parts_idx = [idx for idx in parts_idx]
         parts_idx = np.sort(parts_idx)
         for idx in parts_idx[1:]: # label merged partitions with the first partition label
             partition_index_clone[partition_index == idx + 1] = parts_idx[0] + 1
-    
-    # merge the wind wave partitions
-    wind_parts = np.sort(wind_parts)
-    for wind_part in wind_parts[1:]:# label merged partitions with the first partition label
-        partition_index_clone[partition_index == wind_part] = wind_parts[0]
 
-    if len(wind_parts) > 0:
-        merged_partition_index = _resign_partition_labels(partition_index_clone, set_first_label=wind_parts[0])
-        start_with_wind_flag = True
-    else:
-        merged_partition_index = _resign_partition_labels(partition_index_clone)
-        start_with_wind_flag = False
+    merged_partition_index = _resign_partition_labels(partition_index_clone)
     
-    return merged_partition_index, start_with_wind_flag
+    return merged_partition_index
 
 
 def find_connected_components(p2p_matrix):

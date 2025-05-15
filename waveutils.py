@@ -958,9 +958,9 @@ def label_wind_wave(u10: float, v10: float, K: np.ndarray, PHI: np.ndarray, part
     
     # Step 0: Align the wind coords (east-north) with wave coords (north-west)
     u_north = v10
-    u_west = -u10
-    u_magnitude = np.sqrt(u_north**2 + u_west**2)
-    wind_direction = np.arctan2(u_west, u_north) # rad
+    u_east = u10
+    u_magnitude = np.sqrt(u_north**2 + u_east**2)
+    wind_direction = np.arctan2(u_east, u_north) # rad
 
     wave_age = omega / K / u_magnitude
 

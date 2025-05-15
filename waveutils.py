@@ -888,7 +888,7 @@ def cal_st(wave_spec: np.ndarray, x_mesh: np.ndarray, y_mesh: np.ndarray, spec_m
         to_int_term_y = 2 * np.sqrt(G * K) * compensation_term * np.sin(PHI) * to_int_term * np.exp(-2 * K * depth)
 
         st_north = np.trapz(np.trapz(to_int_term_x, K, axis=0), PHI[0, :])
-        st_west = np.trapz(np.trapz(to_int_term_y, K, axis=0), PHI[0, :])
+        st_east = np.trapz(np.trapz(to_int_term_y, K, axis=0), PHI[0, :])
     elif spec_mode == 'fkxy':
         K = np.sqrt(x_mesh**2 + y_mesh**2)
         if cutoff_wavenumber is not np.nan:
@@ -897,12 +897,12 @@ def cal_st(wave_spec: np.ndarray, x_mesh: np.ndarray, y_mesh: np.ndarray, spec_m
         to_int_term_y = 2 * np.sqrt(G * K) * y_mesh * to_int_term * np.exp(-2 * K * depth)
         
         st_north = np.trapz(np.trapz(to_int_term_x, y_mesh, axis=0), x_mesh[0, :])
-        st_west = np.trapz(np.trapz(to_int_term_y, y_mesh, axis=0), x_mesh[0, :])
+        st_east = np.trapz(np.trapz(to_int_term_y, y_mesh, axis=0), x_mesh[0, :])
     else:
         raise Exception("Invalid spec_mode, spec_mode should be one of 'skth', 'fkth', 'fkxy'.")
 
-    st_mag = np.sqrt(st_north**2 + st_west**2) * 100 # to transfer into cm/s
-    st_dic = np.mod(np.arctan2(st_west, st_north)*180/np.pi, 360)
+    st_mag = np.sqrt(st_north**2 + st_east**2) * 100 # to transfer into cm/s
+    st_dic = np.mod(np.arctan2(st_east, st_north)*180/np.pi, 360) # clockwise to the geo-north
 
     return st_mag, st_dic
 

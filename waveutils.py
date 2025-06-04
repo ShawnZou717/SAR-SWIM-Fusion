@@ -1,5 +1,6 @@
 import numpy as np
-
+from nputils.compat import safe_range as range # to compat with the version diff of numpy
+from nputils.compat import safe_zeros as np_zeros, safe_ones as np_ones, safe_full as np_full
 from skimage import morphology, measure
 from scipy import ndimage
 from scipy.interpolate import interp2d, griddata
@@ -115,10 +116,10 @@ def partition_waves_polar(K_mesh: np.ndarray, PHI_mesh: np.ndarray, wave_spectru
             thresh = threshold_otsu(extended_spectrum)
             fbg_labels = extended_spectrum > thresh
         else:
-            fbg_labels = np.bool_(np.ones(extended_spectrum.shape))
+            fbg_labels = np.bool_(np_ones(extended_spectrum.shape))
         
         coords = peak_local_max(extended_spectrum, labels=fbg_labels)
-        mask = np.zeros(extended_spectrum.shape, dtype=bool)
+        mask = np_zeros(extended_spectrum.shape, dtype=bool)
         mask[tuple(coords.T)] = True
         markers, _ = ndimage.label(mask)
 
@@ -220,7 +221,7 @@ def partition_waves(K_mesh: np.ndarray, PHI_mesh: np.ndarray, wave_spectrum: np.
         fbg_labels = blurred_spectrum > 0
     
     coords = peak_local_max(blurred_spectrum, labels=fbg_labels)
-    mask = np.zeros(blurred_spectrum.shape, dtype=bool)
+    mask = np_zeros(blurred_spectrum.shape, dtype=bool)
     mask[tuple(coords.T)] = True
     markers, _ = ndimage.label(mask)
 
@@ -338,15 +339,22 @@ def interpolate_wave_polar(matrix, K0, PHI0, K1, PHI1, log_scale=True):
     if log_scale:
         matrix = np.log(matrix + 1)
     
-    # Interpolate matrix using bicubic interpolation
+    # 创建扩展数组以处理PHI维度的周期性边界
     matrix_origin = matrix.copy()
-    matrix = np.concatenate((matrix_origin[:, -1:], matrix), axis=1)
-    matrix = np.concatenate((matrix, matrix_origin[:, :1]), axis=1)
-    PHI0 = np.concatenate((PHI0[-1:]-2*np.pi, PHI0, PHI0[:1]+2*np.pi))
-    interpolator = interp2d(PHI0, K0, matrix, kind='cubic')
-
-    # Interpolate for the new K1
-    interpolated_matrix = interpolator(PHI1, K1)
+    matrix_extended = np.concatenate((matrix_origin[:, -1:], matrix_origin, matrix_origin[:, :1]), axis=1)
+    PHI0_extended = np.concatenate((PHI0[-1:]-2*np.pi, PHI0, PHI0[:1]+2*np.pi))
+    
+    # 创建源点和目标点网格
+    PHI0_mesh_ext, K0_mesh_ext = np.meshgrid(PHI0_extended, K0)
+    PHI1_mesh, K1_mesh = np.meshgrid(PHI1, K1)
+    
+    # 使用griddata进行插值，替换interp2d
+    points = np.column_stack((PHI0_mesh_ext.flatten(), K0_mesh_ext.flatten()))
+    values = matrix_extended.flatten()
+    xi = np.column_stack((PHI1_mesh.flatten(), K1_mesh.flatten()))
+    
+    interpolated_values = griddata(points, values, xi, method='cubic', fill_value=0)
+    interpolated_matrix = interpolated_values.reshape(K1_mesh.shape)
 
     # For the K1 values that exceed max(K0), set those values to 0
     PHI_mesh, K_mesh = np.meshgrid(PHI1, K1)
@@ -627,7 +635,7 @@ def calculate_iou(matrix1, label1, matrix2, label2):
     return iou
 
 def partition_distances(col_scale, row_scale, nums_x, partition_index_x, nums_y, partition_index_y):
-    final_dist = np.full((nums_x, nums_y), np.nan)
+    final_dist = np_full((nums_x, nums_y), np.nan)
 
     for x_part in range(1, nums_x+1):
         x_locs = np.argwhere(partition_index_x == x_part)
@@ -659,7 +667,7 @@ def partition_distances(col_scale, row_scale, nums_x, partition_index_x, nums_y,
 
 
 def partition_iou(nums_x, partition_index_x, nums_y, partition_index_y):
-    final_dist = np.full((nums_x, nums_y), np.nan)
+    final_dist = np_full((nums_x, nums_y), np.nan)
 
     for x_part in range(1, nums_x+1):
         x_locs = (partition_index_x == x_part)
@@ -675,7 +683,7 @@ def partition_iou(nums_x, partition_index_x, nums_y, partition_index_y):
 
 
 def partition_intersaction(nums_x, partition_index_x, nums_y, partition_index_y):
-    final_dist = np.full((nums_x, nums_y), np.nan)
+    final_dist = np_full((nums_x, nums_y), np.nan)
 
     for x_part in range(1, nums_x+1):
         x_locs = (partition_index_x == x_part)
@@ -1179,8 +1187,8 @@ def merge_partitions(partition_index: np.ndarray, partition_num: int, K: np.ndar
     if not np.all(np.diff(labels) == 1):
         raise ValueError("The labels are not consecutive integers. Please resign the label number before using this function.")
     
-    partition_connect_flag = np.zeros((partition_num, partition_num), dtype=np.float64)
-    spreads_coef_list = np.zeros((partition_num, 1), dtype=np.float64)
+    partition_connect_flag = np_zeros((partition_num, partition_num), dtype=np.float64)
+    spreads_coef_list = np_zeros((partition_num, 1), dtype=np.float64)
 
     # calculate the spreading coefficient for each partition, background partition 0 is negelected
     for p_idx in range(1, partition_num + 1):

@@ -252,4 +252,67 @@ def sar_swim_fusion(
     return swim_spec_fused, partition_index_swim, removed_partitions, remained_partitions, to_merge_wind_parts
 
     
+def remove_ambiguity_accord_wind(
+    swim_spec: np.ndarray,
+    swim_k_spectra: np.ndarray,
+    swim_phi_spectra: np.ndarray,
+    swim_heading: float,
+    u10: float,
+    v10: float,
+    non_valid_ratio: float = 0.2,
+    tolerance_limit: float = 1E-2
+)-> np.ndarray:
+    """
+    Remove ambiguity of the SWIM wave spectrum according to the wind speed.
 
+    Parameters
+    ----------
+    swim_spec : np.ndarray
+        Slope spectrum from SWIM, shape (nk, nphi), units: m^2/rad.
+    swim_k_spectra : np.ndarray
+        Wavenumber array for SWIM spectrum, same shape as swim_spec, units: 1/m.
+    swim_phi_spectra : np.ndarray
+        Azimuth array for SWIM spectrum, same shape as swim_spec, units: rad.
+    swim_heading: float
+        Heading of the SWIM sensor to the geo-north, units: rad.
+    u10 : float
+        10-meter altitude wind speed (eastward component), units: m/s.
+    v10 : float
+        10-meter altitude wind speed (northward component), units: m/s.
+    non_valid_ratio : float
+        Ratio of non-valid values in the spectra. If the ratio exceeds this value, the function returns NaN matrix.
+        Default is 0.2.
+    tolerance_limit : float
+        Tolerance limit for the significant wave height (Hs) bias after fusion. If the bias exceeds this limit, the function raises an error.
+
+    Returns
+    -------
+    swim_spec_fused : np.ndarray
+        Fused wave spectrum, shape (nk, nphi), units: m^2/rad. If the input spectra are invalid, returns NaN matrix.
+    """
+
+    # 0.0 Check the input dimensions
+    if not (swim_spec.shape == swim_k_spectra.shape == swim_phi_spectra.shape):
+        raise ValueError("swim_spec, swim_k_spectra, and swim_phi_spectra must have the same shape")
+    
+    # 0.1 Limiting the valid ratio of swim and sar spectra
+    invalid_swim = ~np.isfinite(swim_spec)
+    ratio_swim = np.sum(invalid_swim) / swim_spec.size
+    if ratio_swim > non_valid_ratio:
+        return np.full_like(swim_spec, np.nan)
+
+    # 0.2 Sort the two spectra according to the geo-north aligned azimuth
+    swim_phi_spectra = np.mod(swim_phi_spectra + swim_heading, 2*np.pi)
+    sorted_indices = np.argsort(swim_phi_spectra[0, :])
+
+    swim_phi_spectra = swim_phi_spectra[:, sorted_indices]
+    swim_spec = swim_spec[:, sorted_indices]
+
+    # 0.3 Fillin the non-finite values with interpolation
+    swim_spec = refill_invalid_points_periodic(swim_spec, swim_phi_spectra, swim_k_spectra, method='cubic')
+
+    # 1.0 Calculate the wind wave direction
+    wind_direction = np.arctan2(u10, v10) # clockwise rotated from the geo-north
+    wind_direction = np.mod(wind_direction, 2 * np.pi)  # Convert to [0, 2*pi)
+
+    

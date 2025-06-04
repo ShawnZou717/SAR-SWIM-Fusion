@@ -321,6 +321,54 @@ def logpolar_to_cartesian(wave_spectrum: np.ndarray, K_mesh: np.ndarray, PHI_mes
 
 
 
+# def interpolate_wave_polar(matrix, K0, PHI0, K1, PHI1, log_scale=True):
+#     """
+#     Interpolates a 2D matrix along the K dimension (rows), and fills with zeros 
+#     where the new K1 exceeds the original K0 range.
+    
+#     Parameters:
+#     matrix (2D numpy array): The original matrix with dimensions (K0, PHI0).
+#     K0 (1D numpy array): The original K dimension values (k0).
+#     PHI1 (1D numpy array): The PHI1 dimension values (PHI1).
+#     K1 (1D numpy array): The new K dimension values (K1).
+    
+#     Returns:
+#     2D numpy array: The interpolated matrix with dimensions (K1, PHI1).
+#     """
+
+#     if log_scale:
+#         matrix = np.log(matrix + 1)
+    
+#     # 创建扩展数组以处理PHI维度的周期性边界
+#     matrix_origin = matrix.copy()
+#     matrix_extended = np.concatenate((matrix_origin[:, -1:], matrix_origin, matrix_origin[:, :1]), axis=1)
+#     PHI0_extended = np.concatenate((PHI0[-1:]-2*np.pi, PHI0, PHI0[:1]+2*np.pi))
+    
+#     # 创建源点和目标点网格
+#     PHI0_mesh_ext, K0_mesh_ext = np.meshgrid(PHI0_extended, K0)
+#     PHI1_mesh, K1_mesh = np.meshgrid(PHI1, K1)
+    
+#     # 使用griddata进行插值，替换interp2d
+#     points = np.column_stack((PHI0_mesh_ext.flatten(), K0_mesh_ext.flatten()))
+#     values = matrix_extended.flatten()
+#     xi = np.column_stack((PHI1_mesh.flatten(), K1_mesh.flatten()))
+    
+#     interpolated_values = griddata(points, values, xi, method='cubic', fill_value=0)
+#     interpolated_matrix = interpolated_values.reshape(K1_mesh.shape)
+
+#     # For the K1 values that exceed max(K0), set those values to 0
+#     PHI_mesh, K_mesh = np.meshgrid(PHI1, K1)
+#     PHI0_mesh, K0_mesh = np.meshgrid(PHI0, K0)
+#     interpolated_matrix[K_mesh > K0_mesh.max()] = 0
+#     interpolated_matrix[interpolated_matrix < 0] = 0
+
+#     if log_scale:
+#         interpolated_matrix = np.exp(interpolated_matrix) - 1
+
+#     return interpolated_matrix
+
+
+
 def interpolate_wave_polar(matrix, K0, PHI0, K1, PHI1, log_scale=True):
     """
     Interpolates a 2D matrix along the K dimension (rows), and fills with zeros 
@@ -339,22 +387,15 @@ def interpolate_wave_polar(matrix, K0, PHI0, K1, PHI1, log_scale=True):
     if log_scale:
         matrix = np.log(matrix + 1)
     
-    # 创建扩展数组以处理PHI维度的周期性边界
+    # Interpolate matrix using bicubic interpolation
     matrix_origin = matrix.copy()
-    matrix_extended = np.concatenate((matrix_origin[:, -1:], matrix_origin, matrix_origin[:, :1]), axis=1)
-    PHI0_extended = np.concatenate((PHI0[-1:]-2*np.pi, PHI0, PHI0[:1]+2*np.pi))
-    
-    # 创建源点和目标点网格
-    PHI0_mesh_ext, K0_mesh_ext = np.meshgrid(PHI0_extended, K0)
-    PHI1_mesh, K1_mesh = np.meshgrid(PHI1, K1)
-    
-    # 使用griddata进行插值，替换interp2d
-    points = np.column_stack((PHI0_mesh_ext.flatten(), K0_mesh_ext.flatten()))
-    values = matrix_extended.flatten()
-    xi = np.column_stack((PHI1_mesh.flatten(), K1_mesh.flatten()))
-    
-    interpolated_values = griddata(points, values, xi, method='cubic', fill_value=0)
-    interpolated_matrix = interpolated_values.reshape(K1_mesh.shape)
+    matrix = np.concatenate((matrix_origin[:, -1:], matrix), axis=1)
+    matrix = np.concatenate((matrix, matrix_origin[:, :1]), axis=1)
+    PHI0 = np.concatenate((PHI0[-1:]-2*np.pi, PHI0, PHI0[:1]+2*np.pi))
+    interpolator = interp2d(PHI0, K0, matrix, kind='cubic')
+
+    # Interpolate for the new K1
+    interpolated_matrix = interpolator(PHI1, K1)
 
     # For the K1 values that exceed max(K0), set those values to 0
     PHI_mesh, K_mesh = np.meshgrid(PHI1, K1)
@@ -366,7 +407,6 @@ def interpolate_wave_polar(matrix, K0, PHI0, K1, PHI1, log_scale=True):
         interpolated_matrix = np.exp(interpolated_matrix) - 1
 
     return interpolated_matrix
-
 
 def refill_invalid_points_periodic(matrix, x, y, method='cubic', extend_cols=10):
     """

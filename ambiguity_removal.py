@@ -1,6 +1,5 @@
 import numpy as np
 from .waveutils import *
-from nputils.compat import safe_range as range # to compat with the version diff of numpy
 
 
 def find_min_positions(A, row_pairs):

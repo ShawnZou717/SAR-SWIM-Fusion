@@ -56,6 +56,27 @@ def _resign_partition_labels(labels: np.ndarray, background_label: int = 0, set_
     
     return relabelled_matrix
 
+def resign_partition_labels(labels: np.ndarray, background_label: int = 0, set_first_label: int = np.nan):
+    # Step 1: Identify unique labels excluding background (0)
+    unique_labels = np.unique(labels)
+
+    # Step 2: Filter out the background label (0)
+    remaining_labels = [label for label in unique_labels if label != background_label]
+    if set_first_label is not np.nan:
+        remaining_labels = [set_first_label] + [label for label in remaining_labels if label != set_first_label]
+
+    # Step 3: Create a mapping from old labels to new labels
+    new_label_mapping = {old_label: new_label for new_label, old_label in enumerate(remaining_labels, start=1)}
+
+    # Step 4: Create a new matrix to hold the re-labeled values
+    relabelled_matrix = np.copy(labels)
+
+    # Step 5: Update the matrix with new labels
+    for old_label, new_label in new_label_mapping.items():
+        relabelled_matrix[labels == old_label] = new_label
+    
+    return relabelled_matrix
+
 
 def partition_waves_polar(K_mesh: np.ndarray, PHI_mesh: np.ndarray, wave_spectrum: np.ndarray, gaus_blur_ops: int = 2, remove_invalid_parts: bool = True, distinguish_fg_bg = False, version: float=1.0):
     """

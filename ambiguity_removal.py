@@ -1,5 +1,5 @@
 import numpy as np
-from .waveutils import *
+from .wavetools import *
 
 
 def find_min_positions(A, row_pairs):
@@ -251,7 +251,7 @@ def sar_swim_fusion(
     
     return swim_spec_fused, partition_index_swim, removed_partitions, remained_partitions, to_merge_wind_parts
 
-    
+
 def remove_ambiguity_accord_wind(
     swim_spec: np.ndarray,
     swim_k_spectra: np.ndarray,
@@ -315,4 +315,25 @@ def remove_ambiguity_accord_wind(
     wind_direction = np.arctan2(u10, v10) # clockwise rotated from the geo-north
     wind_direction = np.mod(wind_direction, 2 * np.pi)  # Convert to [0, 2*pi)
 
+    # Calculate the angular difference between swim_phi_spectra and wind_direction
+    # Ensure we get the shortest angular distance in the range [-pi, pi]
+    angular_diff = np.abs(swim_phi_spectra - wind_direction)
+    angular_diff = np.minimum(angular_diff, 2 * np.pi - angular_diff)
     
+    # Create a mask for values where the angular difference is greater than pi (180 degrees)
+    # These are the directions opposite to the wind direction (ambiguity to be removed)
+    mask = angular_diff > np.pi / 2
+    
+    # Set the values to zero where the mask is True
+    swim_spec_fused = swim_spec.copy()
+    swim_spec_fused[mask] = 0
+    swim_spec_fused[~mask] *= 2
+    
+    # Verify that the Hs didn't change too much
+    hs_fused = cal_hs(swim_spec_fused, swim_phi_spectra, swim_k_spectra, 'skth')
+    hs_raw = cal_hs(swim_spec, swim_phi_spectra, swim_k_spectra, 'skth')
+    
+    if np.abs(hs_raw - hs_fused) > tolerance_limit:
+        raise ValueError(f"Unexpected behavior happened. Ambiguity removal Hs {hs_fused:.2f}m and raw Hs {hs_raw:.2f}m biases too large.")
+    
+    return swim_spec_fused

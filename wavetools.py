@@ -392,7 +392,7 @@ def interpolate_wave_polar(matrix, K0, PHI0, K1, PHI1, log_scale=True):
     matrix = np.concatenate((matrix_origin[:, -1:], matrix), axis=1)
     matrix = np.concatenate((matrix, matrix_origin[:, :1]), axis=1)
     PHI0 = np.concatenate((PHI0[-1:]-2*np.pi, PHI0, PHI0[:1]+2*np.pi))
-    interpolator = interp2d(PHI0, K0, matrix, kind='cubic')
+    interpolator = interp2d(PHI0, K0, matrix, kind='cubic', fill_value=0)
 
     # Interpolate for the new K1
     interpolated_matrix = interpolator(PHI1, K1)
@@ -902,10 +902,10 @@ def cal_st(wave_spec: np.ndarray, x_mesh: np.ndarray, y_mesh: np.ndarray, spec_m
         The wave spectrum.
     
     x_mesh : np.ndarray
-        The x-coordinates of the wave spectrum.
+        Represents azimuth in '_kth' mode, and Kx in 'fkxy' mode.
     
     y_mesh : np.ndarray
-        The y-coordinates of the wave spectrum.
+        Represents wavenumber in '_kth' mode, and Ky in 'fkxy' mode.
     
     spec_mode : str
         The mode of the wave spectrum ('skth', 'fkth', 'fkxy'). skth denotes slope spectrum S(K, theta), fkth represents wave spectrum F(K, theta), while fkxy denotes wave spectrum F(Kx, Ky). Slope spectrum S(K, theta) = K^2*F(K, theta).

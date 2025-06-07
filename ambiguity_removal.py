@@ -86,6 +86,8 @@ def sar_swim_fusion(
         Fused wave spectrum, shape (nk, nphi), units: m^2/rad. If the input spectra are invalid, returns NaN matrix.
     partition_index_swim : np.ndarray
         Partition index for the SWIM spectrum, shape (nk, nphi). Each partition is labeled with a unique integer.
+    partition_index_sar : np.ndarray
+        Partition index for the SAR spectrum, shape (nk, nphi). Each partition is labeled with a unique integer.
     removed_partitions : list
         List of removed partitions from the SWIM spectrum. Each partition is represented by its index.
     remained_partitions : list
@@ -105,7 +107,7 @@ def sar_swim_fusion(
     ratio_swim = np.sum(invalid_swim) / swim_spec.size
     ratio_sar = np.sum(invalid_sar) / sar_spec.size
     if ratio_swim > non_valid_ratio or ratio_sar > non_valid_ratio:
-        return np.full_like(swim_spec, np.nan), np.full_like(swim_spec, np.nan), [], [], []
+        return np.full_like(swim_spec, np.nan), np.full_like(swim_spec, np.nan), np.full_like(swim_spec, np.nan), [], [], []
 
     # 0.2 Sort the two spectra according to the geo-north aligned azimuth
     swim_phi_spectra = np.mod(swim_phi_spectra + swim_heading, 2*np.pi)
@@ -249,7 +251,7 @@ def sar_swim_fusion(
     if np.abs(hs_raw - hs_fused) > tolerance_limit:
         raise ValueError(f"Fusion Hs {hs_fused:.2f}m and raw Hs {hs_raw:.2f}m biases too large.")
     
-    return swim_spec_fused, partition_index_swim, removed_partitions, remained_partitions, to_merge_wind_parts
+    return swim_spec_fused, partition_index_swim, partition_index_sar, removed_partitions, remained_partitions, to_merge_wind_parts
 
 
 def remove_ambiguity_accord_wind(

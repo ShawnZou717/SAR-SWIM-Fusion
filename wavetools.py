@@ -7,6 +7,126 @@ from scipy.interpolate import interp2d, griddata
 from skimage.filters import threshold_otsu
 from skimage.segmentation import watershed
 from skimage.feature import peak_local_max
+from shapely.geometry import Polygon
+from geopy.distance import geodesic
+from waveutils import config
+# import warnings
+# warnings.filterwarnings("error", category=RuntimeWarning)
+
+homo_dist = config.homo_dist
+homo_time = config.homo_time
+
+# Access safety parameters
+max_lat = config.max_lat
+min_lat = config.min_lat
+
+
+def spatio_temporal_match(
+        swim_moment: list[np.datetime64] | np.datetime64,
+        sar_moment: list[np.datetime64] | np.datetime64,
+        swim_polygon: list[Polygon] | Polygon,
+        sar_polygon: list[Polygon] | Polygon,
+        align_rule: str = 'closest_time',
+        thres_t: np.timedelta64 = np.timedelta64(homo_time, 'D'),
+        thres_d: float = homo_dist # km
+)-> list[tuple[int, int, float]]:
+    """
+    Match the spatio-temporal information between SWIM and SAR data.
+    
+    Parameters:
+        swim_moment (np.datetime64): The mean timestamp of SWIM L2 Geo boxes.
+        sar_moment (np.datetime64): The timestamp of the SAR data.
+        swim_polygon (list[Polygon]): Polygon type, illustrating the SWIM L2 Geo boxes. Points in the Polygon should be in (lon, lat) order.
+        sar_polygon (list[Polygon]): Polygon type, illustrating the SAR L3 Geo boxes. Points in the Polygon should be in (lon, lat) order.
+        align_rule (str): The rule for alignment, can be 'closest_time', 'closest_distance', or 'even_time&distance'.
+        thres_t (np.timedelta64): The threshold for time difference, default is 3 days.
+        thres_d (float): The threshold for distance difference, default is 180 km.
+    
+    Returns:
+        matched_swim_sar_idx (tuple[int, int, float]): A list of matched indices, where the first element is the index of SWIM and the second element is the index of SAR, the thrid element denotes the corresponding values of criteria.
+    """
+    # import warnings
+    # warnings.filterwarnings("error", category=RuntimeWarning)
+    if isinstance(swim_moment, np.datetime64):
+        swim_moment = [swim_moment]
+    if isinstance(sar_moment, np.datetime64):
+        sar_moment = [sar_moment]
+    if isinstance(swim_polygon, Polygon):
+        swim_polygon = [swim_polygon]
+    if isinstance(sar_polygon, Polygon):
+        sar_polygon = [sar_polygon]
+    if len(swim_moment) != len(swim_polygon):
+        raise ValueError("The length of moments and Polygons for SWIM must match.")
+    if len(sar_moment) != len(sar_polygon):
+        raise ValueError("The length of moments and Polygons for SAR must match.")
+    if align_rule not in ['closest_time', 'closest_distance', 'even_time&distance']:
+        raise ValueError("align_rule must be one of 'closest_time', 'closest_distance', or 'even_time&distance'.")
+    
+    thres_t = thres_t.astype('timedelta64[s]')
+    
+    t_idx_sorted = np.argsort(swim_moment)
+    swim_moment = [swim_moment[i] for i in t_idx_sorted]
+    swim_polygon = [swim_polygon[i] for i in t_idx_sorted]
+
+    t_idx_sorted = np.argsort(sar_moment)
+    sar_moment = [sar_moment[i] for i in t_idx_sorted]
+    sar_polygon = [sar_polygon[i] for i in t_idx_sorted]
+
+    # Initialize the matched indices list
+    matched_swim_sar_idx = []
+
+    # For each SWIM data point
+    for i, sw_moment in enumerate(swim_moment):
+        sw_poly = swim_polygon[i]
+        matching_indices = []
+        
+        # For each SAR data point
+        for j, sr_moment in enumerate(sar_moment):
+            # Check time difference
+            time_diff = abs(sr_moment - sw_moment)
+            if time_diff <= thres_t:
+                # Check spatial overlap
+                sr_poly = sar_polygon[j]
+                # try:
+                #     intersection_area = sw_poly.intersection(sr_poly).area
+                # except RuntimeWarning as w:
+                #     print(f"Warning: {w} for {i}th SWIM polygon {sw_poly} and {j}th SAR polygon {sr_poly}.")
+                # except RuntimeError as e:
+                #     print(f"Error: {e} for {i}th SWIM polygon {sw_poly} and {j}th SAR polygon {sr_poly}.")
+                #     continue
+                intersection_area = sw_poly.intersection(sr_poly).area
+                min_area = min(sw_poly.area, sr_poly.area)
+                
+                if min_area > 0 and intersection_area / min_area >= 0.5: # area based distance determination
+                    # Convert shapely Points to lat/lon and calculate geodesic distance in km
+                    sw_centroid = sw_poly.centroid
+                    sr_centroid = sr_poly.centroid
+                    sw_coords = (sw_centroid.y, sw_centroid.x)  # (lat, lon)
+                    sr_coords = (sr_centroid.y, sr_centroid.x)  # (lat, lon)
+                    dist = geodesic(sw_coords, sr_coords).kilometers
+
+                    weighted_t_dis = time_diff/thres_t + dist/thres_d
+                    # Convert time_diff to seconds as a float
+                    time_diff_seconds = time_diff.astype('timedelta64[s]').astype(float)
+                    matching_indices.append((j, time_diff_seconds, dist, weighted_t_dis))
+        
+        # Sort matches by time difference if align_rule is 'closest_time'
+        # Sort by spatial overlap if align_rule is 'closest_distance'
+        # Use a combination if align_rule is 'even_time&distance'
+        if matching_indices:
+            if align_rule == 'closest_time':
+                align_rule_idx = 1
+                best_match = min(matching_indices, key=lambda x: x[align_rule_idx])
+            elif align_rule == 'closest_distance':
+                align_rule_idx = 2
+                best_match = min(matching_indices, key=lambda x: x[align_rule_idx])
+            elif align_rule == 'even_time&distance':
+                align_rule_idx = 3
+                best_match = min(matching_indices, key=lambda x: x[align_rule_idx])
+            
+            matched_swim_sar_idx.append((i, best_match[0], best_match[align_rule_idx]))
+
+    return matched_swim_sar_idx #(swim_idx, sar_idx, criteria_value)
 
 
 def find_strong_speckle_noise(swim_slope_spec: np.ndarray, quant: float = 0.75, noise_thres: float = 0.85):

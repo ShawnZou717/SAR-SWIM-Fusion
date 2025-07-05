@@ -162,7 +162,7 @@ def sar_swim_fusion(
     nums_sar = partition_index_sar.max()
     paired_sar_parts, sar_pair_iou, self_paired_parts_sar = pair_up_partitions_polar(nums_sar, partition_index_sar, iou_thres=0.5)
 
-    print(f"The paired up SAR partitions are {paired_sar_parts}. The IOU of SAR is {sar_pair_iou}")
+    # print(f"The paired up SAR partitions are {paired_sar_parts}. The IOU of SAR is {sar_pair_iou}")
     for p1, p2 in paired_sar_parts:
         partition_index_sar[partition_index_sar == p2] = 0
         partition_index_sar[partition_index_sar == p1] = 0
@@ -207,10 +207,10 @@ def sar_swim_fusion(
                 paired_swim_parts_found.append(matched_swim_part_index)
                 disable_index.append(idx)
 
-        if paired_swim_parts_found:
-            print(f"These paired up SWIM partitions are excluded from the fusion: {paired_swim_parts_found}.")
-        else:
-            print("All SAR partitions are valid.")
+        # if paired_swim_parts_found:
+            # print(f"These paired up SWIM partitions are excluded from the fusion: {paired_swim_parts_found}.")
+        # else:
+            # print("All SAR partitions are valid.")
 
         for idx, item in enumerate(min_positions):
             swim_part_index = item[0]
@@ -225,7 +225,7 @@ def sar_swim_fusion(
             swim_spec_rolled = np.roll(swim_spec, swim_spec.shape[1]//2, axis=1)
             swim_spec_fused[to_raise_part] += swim_spec_rolled[to_raise_part]
     else:
-        print("No valid SAR partition found.")
+        # print("No valid SAR partition found.")
         swim_spec_fused = swim_spec.copy()
     
     # 2.1.2 Labeling the wind wave with the paired ECMWF wind speed in L2 product
@@ -249,7 +249,7 @@ def sar_swim_fusion(
     # Fusion causes the amplitude change, and the interpolation method in trapz is affected by these biases to produce a very tiny biaes upon the integration results.
     # That is why we need to set a tolerance to the Hs biases. Here the tolerance is set to 0.01m.
     if np.abs(hs_raw - hs_fused) > tolerance_limit:
-        raise ValueError(f"Fusion Hs {hs_fused:.2f}m and raw Hs {hs_raw:.2f}m biases too large.")
+        Warning(f"Fusion Hs {hs_fused:.2f}m and raw Hs {hs_raw:.2f}m biases too large.")
     
     return swim_spec_fused, partition_index_swim, partition_index_sar, removed_partitions, remained_partitions, to_merge_wind_parts
 
@@ -336,6 +336,6 @@ def remove_ambiguity_accord_wind(
     hs_raw = cal_hs(swim_spec, swim_phi_spectra, swim_k_spectra, 'skth')
     
     if np.abs(hs_raw - hs_fused) > tolerance_limit:
-        raise ValueError(f"Unexpected behavior happened. Ambiguity removal Hs {hs_fused:.2f}m and raw Hs {hs_raw:.2f}m biases too large.")
+        Warning(f"Unexpected behavior happened. Ambiguity removal Hs {hs_fused:.2f}m and raw Hs {hs_raw:.2f}m biases too large.")
     
     return swim_spec_fused

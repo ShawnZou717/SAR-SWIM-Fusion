@@ -234,7 +234,7 @@ def sar_swim_fusion(
     # We stick to the observation information, so if the wind coverd wave parts were fused according to the SAR spectra in advance, no matter removed nor remained, it would need no more processing. Only those never-processed wind parts need to be fused.
     to_merge_wind_parts = [part_no for part_no in wind_parts if part_no - 1 not in removed_partitions and part_no - 1 not in remained_partitions]
     for part_no in to_merge_wind_parts:
-        if swim_part_dict.get(part_no, None) is not None:
+        if swim_part_dict.get(part_no - 1, None) is not None:
             valid_swim_part_found += 1
             to_remove_part = partition_index_swim == (swim_part_dict[part_no - 1] + 1)
             swim_spec_fused[to_remove_part] = 0
@@ -250,6 +250,11 @@ def sar_swim_fusion(
     # That is why we need to set a tolerance to the Hs biases. Here the tolerance is set to 0.01m.
     if np.abs(hs_raw - hs_fused) > tolerance_limit:
         Warning(f"Fusion Hs {hs_fused:.2f}m and raw Hs {hs_raw:.2f}m biases too large.")
+    
+    for idx in range(len(removed_partitions)):
+        removed_partitions[idx] += 1
+    for idx in range(len(remained_partitions)):
+        remained_partitions[idx] += 1
     
     return swim_spec_fused, partition_index_swim, partition_index_sar, removed_partitions, remained_partitions, to_merge_wind_parts
 

@@ -1419,3 +1419,23 @@ def find_connected_components(p2p_matrix):
             components.append(component)
     
     return components
+
+
+def partition_edges(parts, x, y):
+    M, N = parts.shape[0], parts.shape[1]
+    edges_set = []
+    for j in range(1, M - 1):
+        for i in range(N):
+            dx_left = np.mod(x[j, i] - x[j, (i - 1) % N], 2*np.pi)
+            dx_right = np.mod(x[j, (i + 1) % N] - x[j, i], 2*np.pi)
+            dy_up = y[j, i] - y[j - 1, i]
+            dy_down = y[j + 1, i] - y[j, i]
+            if parts[j, i] != parts[j, (i - 1) % N]:
+                edges_set.append([(x[j, i]-dx_left/2, y[j, i]-dy_up/2), (x[j, i]-dx_left/2, y[j, i]+dy_down/2)])
+            if parts[j, i] != parts[j, (i + 1) % N]:
+                edges_set.append([(x[j, i]+dx_right/2, y[j, i]-dy_up/2), (x[j, i]+dx_right/2, y[j, i]+dy_down/2)])
+            if parts[j, i] != parts[(j - 1), i]:
+                edges_set.append([(x[j, i]-dx_left/2, y[j, i]-dy_up/2), (x[j, i]+dx_right/2, y[j, i]-dy_up/2)])
+            if parts[j, i] != parts[(j + 1), i]:
+                edges_set.append([(x[j, i]-dx_left/2, y[j, i]+dy_down/2), (x[j, i]+dx_right/2, y[j, i]+dy_down/2)])
+    return edges_set

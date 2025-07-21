@@ -10,6 +10,8 @@ from skimage.feature import peak_local_max
 from shapely.geometry import Polygon
 from geopy.distance import geodesic
 from waveutils import config
+from scipy.signal import find_peaks
+from scipy.ndimage import label
 # import warnings
 # warnings.filterwarnings("error", category=RuntimeWarning)
 
@@ -436,6 +438,69 @@ def logpolar_to_cartesian(wave_spectrum: np.ndarray, K_mesh: np.ndarray, PHI_mes
     cartesian_spectrum = np.exp(cartesian_spectrum_logged) - 1  # Convert back to original scale
     
     return cartesian_spectrum, kx_grid, ky_grid
+
+def dominant_mean(hist, n_peak=0):
+    """
+    Identifies the dominant peak in a histogram and computes the weighted mean of the region around that peak.
+    This function analyzes a histogram to find local maxima (peaks) and selects the nth most prominent peak (by height).
+    It then determines the region around the selected peak where the histogram values are at least two-thirds of the peak value,
+    accounting for periodicity by extending the histogram. The function returns a mask indicating the region associated with the peak,
+    and the weighted mean of the bin centers within this region.
+    Parameters
+    ----------
+    hist : tuple of (np.ndarray, np.ndarray)
+        A tuple containing the histogram values and bin edges, as returned by numpy's `np.histogram`.
+        - hist[0]: Array of histogram counts/values.
+        - hist[1]: Array of bin edges.
+    n_peak : int, optional
+        The index of the peak to select (0 for the highest peak, 1 for the second highest, etc.).
+        Defaults to 0.
+    Returns
+    -------
+    label_array : np.ndarray
+        A binary array of the same length as the histogram values, indicating the region around the selected peak.
+        Elements with value 1 correspond to bins within the dominant region.
+    weighted_mean : float
+        The weighted mean of the bin centers within the dominant region. Returns NaN if the region is empty.
+    Raises
+    ------
+    ValueError
+        If `n_peak` exceeds the number of peaks found in the histogram.
+    Notes
+    -----
+    - If no local maxima are found, the global maximum is used as the peak.
+    - The region around the peak is defined as contiguous bins where the histogram value is at least two-thirds of the peak value,
+      with periodicity handled by extending the histogram.
+    """
+
+    values = hist[0]
+    # Find all peak indices (local maxima)
+    peaks, _ = find_peaks(values)
+    if len(peaks) == 0:
+        # fallback: use global maximum if no local maxima found
+        peaks = [np.argmax(values)]
+    if n_peak >= len(peaks):
+        raise ValueError(f"n_peak={n_peak} exceeds number of peaks ({len(peaks)}) found in histogram.")
+    peak_idx = peaks[np.argsort(values[peaks])[::-1][n_peak]]
+    # Extend values for periodicity
+    extended = np.concatenate([values, values])
+    mask = extended >= (values[peak_idx] * 2/3)
+    labeled, num = label(mask)
+    region_label = labeled[peak_idx]
+    label_array = (labeled[:len(values)] == region_label).astype(int)
+    idxs = np.where(label_array == 1)[0]
+    if len(idxs) > 0:
+        left = idxs[0] - 1 if idxs[0] > 0 else len(label_array) - 1
+        right = idxs[-1] + 1 if idxs[-1] < len(label_array) - 1 else 0
+        label_array[left] = 1
+        label_array[right] = 1
+    bin_centers = (hist[1][:-1] + hist[1][1:]) / 2
+    weights = values * label_array
+    if np.sum(weights) > 0:
+        weighted_mean = np.sum(bin_centers * weights) / np.sum(weights)
+    else:
+        weighted_mean = np.nan
+    return label_array, weighted_mean
 
 
 

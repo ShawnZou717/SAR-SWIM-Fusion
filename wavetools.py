@@ -387,7 +387,7 @@ def partition_waves(K_mesh: np.ndarray, PHI_mesh: np.ndarray, wave_spectrum: np.
             extended_spectrum = np.hstack((intermedia_term[:, -1:], intermedia_term))
 
             E_part = np.trapz(np.trapz(extended_spectrum, x=PHI_mesh_extended, axis=1), x=K_mesh[:, 0])
-            if E_part < 0.0625 * Etot and 4 * np.sqrt(E_part) < 1:
+            if (E_part < 0.0625 * Etot) and (4 * np.sqrt(E_part) < 1):
                 partitioned_waves[labels_polar == p_label] = background_label
     
     partitioned_waves = _resign_partition_labels(partitioned_waves)
@@ -1161,7 +1161,7 @@ def cal_st(wave_spec: np.ndarray, x_mesh: np.ndarray, y_mesh: np.ndarray, spec_m
     return st_mag, st_dic
 
 
-def label_wind_wave(u10: float, v10: float, K: np.ndarray, PHI: np.ndarray, partition_index: np.ndarray, slope_spec: np.ndarray, dispersion_relation: str='deep water', ocean_depth: float=np.inf, wave_age_thres: float=1.5) -> np.ndarray:
+def label_wind_wave(u10: float, v10: float, K: np.ndarray, PHI: np.ndarray, partition_index: np.ndarray, slope_spec: np.ndarray, dispersion_relation: str='deep water', ocean_depth: float=np.inf, wave_age_thres: float=1.5, dividing_method = 'parabolic') -> np.ndarray:
     """
     Label the wind wave and swell wave in the wave spectrum.
 
@@ -1216,14 +1216,23 @@ def label_wind_wave(u10: float, v10: float, K: np.ndarray, PHI: np.ndarray, part
     u_magnitude = np.sqrt(u_north**2 + u_east**2)
     wind_direction = np.arctan2(u_east, u_north) # rad
 
-    wave_age = omega / K / u_magnitude
+    if dividing_method == 'parabolic':
+        wave_age = omega / K / u_magnitude
 
-    wave_age_spread = wave_age_thres * np.cos(PHI - wind_direction)
-    wave_age_spread[wave_age_spread < 0] = -np.inf
+        wave_age_spread = wave_age_thres * np.cos(PHI - wind_direction)
+        wave_age_spread[wave_age_spread < 0] = -np.inf
 
-    wind_flag = np.zeros_like(K)
-    wind_flag[wave_age < wave_age_spread] = 1
-    wind_flag[wave_age >= wave_age_spread] = 0
+        wind_flag = np.zeros_like(K)
+        wind_flag[wave_age < wave_age_spread] = 1
+        wind_flag[wave_age >= wave_age_spread] = 0
+    elif dividing_method == 'radius':
+        K_thres = omega / u_magnitude / wave_age_thres
+
+        wind_flag = np.zeros_like(K)
+        wind_flag[(K > K_thres) & (np.cos(PHI - wind_direction) > 0)] = 1
+        # wind_flag[K <= K_thres] = 0
+    else:
+        raise Exception("Invalid dividing_method, dividing_method should be one of 'parabolic', 'radius'.")
 
     # find all partitions whose peak energy falls into the wind area
     wind_parts = []

@@ -47,7 +47,9 @@ def sar_swim_fusion(
     u10: float,
     v10: float,
     non_valid_ratio: float = 0.2,
-    tolerance_limit: float = 1E-2
+    tolerance_limit: float = 1E-2,
+    use_sar: bool = True,
+    use_wave_age: bool = True
 )-> tuple[np.ndarray, np.ndarray, list, list, list]:
     """
     Fuse wave spectra data from SWIM, SAR, and PAPA.
@@ -176,7 +178,7 @@ def sar_swim_fusion(
     # 2.1.1 Machting the SWIM and SAR partitions
     removed_partitions = []
     valid_swim_part_found = 0
-    if nums_sar > 0: # if there are no SAR partitions, we don't need to match the partitions
+    if (nums_sar > 0) and use_sar: # if there are no SAR partitions, we don't need to match the partitions
         partition_intecs = partition_intersaction(nums_swim, partition_index_swim, nums_sar, partition_index_sar)
 
         # exclude the non-matched swim parts
@@ -230,18 +232,19 @@ def sar_swim_fusion(
     
     # 2.1.2 Labeling the wind wave with the paired ECMWF wind speed in L2 product
     remained_partitions = [swim_part_dict[part_idx] for part_idx in removed_partitions if swim_part_dict.get(part_idx, None) is not None]
-
-    # We stick to the observation information, so if the wind coverd wave parts were fused according to the SAR spectra in advance, no matter removed nor remained, it would need no more processing. Only those never-processed wind parts need to be fused.
     to_merge_wind_parts = [part_no for part_no in wind_parts if part_no - 1 not in removed_partitions and part_no - 1 not in remained_partitions]
-    for part_no in to_merge_wind_parts:
-        if swim_part_dict.get(part_no - 1, None) is not None:
-            valid_swim_part_found += 1
-            to_remove_part = partition_index_swim == (swim_part_dict[part_no - 1] + 1)
-            swim_spec_fused[to_remove_part] = 0
 
-            to_raise_part = partition_index_swim == (part_no)
-            swim_spec_rolled = np.roll(swim_spec, swim_spec.shape[1]//2, axis=1)
-            swim_spec_fused[to_raise_part] += swim_spec_rolled[to_raise_part]
+    if use_wave_age:
+        # We stick to the observation information, so if the wind coverd wave parts were fused according to the SAR spectra in advance, no matter removed nor remained, it would need no more processing. Only those never-processed wind parts need to be fused.
+        for part_no in to_merge_wind_parts:
+            if swim_part_dict.get(part_no - 1, None) is not None:
+                valid_swim_part_found += 1
+                to_remove_part = partition_index_swim == (swim_part_dict[part_no - 1] + 1)
+                swim_spec_fused[to_remove_part] = 0
+
+                to_raise_part = partition_index_swim == (part_no)
+                swim_spec_rolled = np.roll(swim_spec, swim_spec.shape[1]//2, axis=1)
+                swim_spec_fused[to_raise_part] += swim_spec_rolled[to_raise_part]
     
     hs_fused = cal_hs(swim_spec_fused, swim_phi_spectra, swim_k_spectra, 'skth')
     hs_raw = cal_hs(swim_spec, swim_phi_spectra, swim_k_spectra, 'skth')

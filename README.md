@@ -14,7 +14,8 @@ If you use this code in your research, please cite the following manuscript curr
   title={Fusing SAR and SWIM Observations to Improve the Global Stokes Drift Estimates},
   author={Zou, Shihao and Hauser, Danièle and Peureux, Charles and Li, Qing},
   year={2026},
-  note={Manuscript in preparation}
+  journal={Remote Sensing of Environment},
+  note={Under Review}
 }
 ```
 

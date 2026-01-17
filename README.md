@@ -4,7 +4,7 @@ This repository implements an open-source workflow for fusing SAR and SWIM obser
 
 ## Citation
 
-If you use this code in your research, please cite the following manuscript currently in preparation:
+If you use this code in your research, please cite the following manuscript currently under review:
 
 > **Zou Shihao, Hauser Danièle, Peureux Charles, Li Qing** (2026). Fusing SAR and SWIM Observations to Improve the Global Stokes Drift Estimates. *Remote Sensing of Environment*. Under Review.
 

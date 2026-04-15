@@ -1,6 +1,6 @@
 import numpy as np
-from nputils.compat import safe_range as range # to compat with the version diff of numpy
-from nputils.compat import safe_zeros as np_zeros, safe_ones as np_ones, safe_full as np_full
+from .nputils.compat import safe_range as range # to compat with the version diff of numpy
+from .nputils.compat import safe_zeros as np_zeros, safe_ones as np_ones, safe_full as np_full
 from skimage import morphology, measure
 from scipy import ndimage
 from scipy.interpolate import interp2d, griddata
@@ -1029,6 +1029,9 @@ def find_optimal_shift(x: np.ndarray, partition_x: np.ndarray, y: np.ndarray, pa
 
 # turn the efth into slope spectrum of wavenumber domain
 def efth2Sk(efth: np.ndarray, frequency: np.ndarray, PHI: np.ndarray) -> np.ndarray:
+    """
+    This function converts the wave spectrum of unit m^2/Hz/deg into slope spectrum (K^2F(K,\theta), where F~m^4/rad) of wavenumber domain with unit m^2/rad
+    """
     PHI_mesh, frequency_mesh = np.meshgrid(PHI, frequency)
 
     gravity_acceleration = 9.81
